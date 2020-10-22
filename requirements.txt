@@ -1,0 +1,8 @@
+itk==4.13.2.post1
+itk-core==4.13.2.post1
+itk-filtering==4.13.2.post1
+itk-io==4.13.2.post1
+itk-numerics==4.13.2.post1
+itk-registration==4.13.2.post1
+itk-segmentation==4.13.2.post1
+numpy==1.16.3

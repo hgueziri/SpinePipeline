@@ -1,0 +1,121 @@
+function usage()
+{
+    echo -e "Usage: $0 -rp -i inputFile [-o outputFile] [-t 150]"
+	echo -e "\t-i \t the file containing the CT image"
+	echo -e "\t-o \t (optional) the file containing the rotated MINC file. If not specified, the command overwrites inputFile."
+    echo -e ""
+    echo -e "\t-r \tRotate input image from LPS to RAS"
+    echo -e "\t-p \tExtract posterior surface of vertebra"
+    echo -e "\t-t \tThreshold value in H.U. (default 150)"
+    echo -e ""
+    echo -e "\t-h \tDisplay help message"
+    echo -e "\t-v \tVerbose mode"
+    echo -e ""
+}
+
+CURRENTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+VENVDIR=$CURRENTDIR/venv
+inputFile=""
+outputFile=""
+overwrite=false
+rotateToRAS=false
+extractPosterior=false
+threshold=""
+
+while getopts ":rpvht:i:o:" opt; do
+  case ${opt} in
+  	i )
+      	inputFile=$OPTARG
+        ;;
+    o )
+		outputFile=$OPTARG
+		;;
+	r ) 
+		rotateToRAS=true
+		;;
+	p ) 
+		extractPosterior=true
+		;;
+	t ) 
+		threshold=$OPTARG
+		;;
+  	h ) 
+		usage
+		exit
+		;;
+    v )
+		verbose=true
+		;;
+	
+    \? )
+      	echo "Invalid option: $OPTARG" 1>&2
+        ;;
+    : )
+      	echo "Invalid option: $OPTARG requires an argument" 1>&2
+        ;;
+  esac
+done
+shift $((OPTIND -1))
+
+if [ -z "$inputFile" ] ; then
+	echo "Invalid argument. No input file specified."
+	usage
+	exit
+fi
+
+if [ -z "$outputFile" ] ; then 
+	overwrite=true
+	outputFile=${inputFile%.*}_coverted.mnc
+fi
+
+
+## activate virtual env
+if [ "$verbose" = true ] ; then 
+	echo "Processing image $inputFile"
+	echo "- Activating python virtual env"
+fi
+source $VENVDIR/bin/activate
+
+## Converting from LPS to RAS
+if [ "$verbose" = true ] ; then 
+	echo "-- Converting MINC file orientation LPS to RAS"
+fi
+
+if [ "$rotateToRAS" = true ] ; then
+	python $CURRENTDIR/MincOrientationFix.py $inputFile $outputFile
+	if [ "$overwrite" = true ] ; then
+		rm -f $inputFile
+		mv $outputFile $inputFile
+	fi
+fi
+
+## Segmenting the posterior surface of the vertebra
+if [ -z "$threshold" ] ; then 
+	threshold="150"
+fi
+
+if [ "$verbose" = true ] ; then 
+	echo "-- Segmenting posterior surface of vertebra"
+	echo "--- Threshold: " $threshold
+fi
+
+if [ "$extractPosterior" = true ] ; then
+
+	if [ "$overwrite" = false -a "$rotateToRAS" = true ] ; then
+		inputFile=$outputFile
+		outputFile=${outputFile%.*}_bt.mnc
+	else
+		outputFile=${inputFile%.*}_bt.mnc
+	fi
+	python $CURRENTDIR/ForwardRaycast.py $inputFile $outputFile $threshold
+fi
+
+## deactivate virtual env
+if [ "$verbose" = true ] ; then 
+	echo "- Deactivating python virtual env"
+fi
+deactivate
+
+if [ "$verbose" = true ] ; then 
+	echo "Done."
+fi
